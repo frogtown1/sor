@@ -2,7 +2,6 @@ import $ivy.`com.lihaoyi::scalatags:0.9.1`, scalatags.Text.all._
 import $ivy.`com.atlassian.commonmark:commonmark:0.13.1`
 
 interp.watch(os.pwd / "post")
-
 val postInfo = os
   .list(os.pwd / "post")
   .map{ p =>
@@ -12,6 +11,11 @@ val postInfo = os
   .sortBy(_._1.toInt)
 
 def mdNameToHtml(name: String) = name.replace(" ", "-").toLowerCase + ".html"
+
+val spectreCss = link(
+  rel := "stylesheet",
+  href := "https://unpkg.com/spectre.css/dist/spectre.min.css"
+)
 
 os.remove.all(os.pwd / "out")
 os.makeDir.all(os.pwd / "out" / "post")
@@ -25,8 +29,9 @@ for ((_, suffix, path) <- postInfo) {
     os.pwd / "out" / "post" / mdNameToHtml(suffix),
     doctype("html")(
       html(
+        head(spectreCss),
         body(
-          h1(a("Blog"), " / ", suffix),
+          h1(a(href := "../index.html")("Blog"), " / ", suffix),
           raw(output)
         )
       )
@@ -38,10 +43,11 @@ os.write(
   os.pwd / "out" / "index.html",
   doctype("html")(
     html(
+      head(spectreCss),
       body(
         h1("Blog"),
         for ((_, suffix, _) <- postInfo)
-        yield h2(suffix)
+        yield h2(a(href := ("post/" + mdNameToHtml(suffix)))(suffix))
       )
     )
   )
