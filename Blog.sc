@@ -1,4 +1,5 @@
 import $ivy.`com.lihaoyi::scalatags:0.9.1`, scalatags.Text.all._
+import $ivy.`com.atlassian.commonmark:commonmark:0.13.1`
 
 interp.watch(os.pwd / "post")
 
@@ -10,9 +11,29 @@ val postInfo = os
   }
   .sortBy(_._1.toInt)
 
-// Append HTML blob to an index.html output
+def mdNameToHtml(name: String) = name.replace(" ", "-").toLowerCase + ".html"
+
 os.remove.all(os.pwd / "out")
 os.makeDir.all(os.pwd / "out" / "post")
+
+for ((_, suffix, path) <- postInfo) {
+  val parser = org.commonmark.parser.Parser.builder().build()
+  val document = parser.parse(os.read(path))
+  val renderer = org.commonmark.renderer.html.HtmlRenderer.builder().build()
+  val output = renderer.render(document)
+  os.write(
+    os.pwd / "out" / "post" / mdNameToHtml(suffix),
+    doctype("html")(
+      html(
+        body(
+          h1(a("Blog"), " / ", suffix),
+          raw(output)
+        )
+      )
+    )
+  )
+}
+
 os.write(
   os.pwd / "out" / "index.html",
   doctype("html")(
