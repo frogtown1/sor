@@ -1,54 +1,72 @@
 import $ivy.`com.lihaoyi::scalatags:0.9.1`, scalatags.Text.all._
 import $ivy.`com.atlassian.commonmark:commonmark:0.13.1`
 
-interp.watch(os.pwd / "post")
-val postInfo = os
-  .list(os.pwd / "post")
-  .map{ p =>
-    val s"$prefix - $suffix.md" = p.last
-    (prefix, suffix, p)
+@main def main(targetGitRepo: String = ""): Unit = {
+  interp.watch(os.pwd / "post")
+  val postInfo = os
+    .list(os.pwd / "post")
+    .map{ p =>
+      val s"$prefix - $suffix.md" = p.last
+      val publishDate = java.time.LocalDate.ofInstant(
+        java.time.Instant.ofEpochMilli(os.mtime(p)),
+        java.time.ZoneOffset.UTC
+      )
+      (prefix, suffix, p, publishDate)
+    }
+    .sortBy(_._1.toInt)
+
+  def mdNameToHtml(name: String) = name.replace(" ", "-").toLowerCase + ".html"
+
+  val bulmaCss = link(
+    rel := "stylesheet",
+    href := "https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css"
+  )
+
+  os.remove.all(os.pwd / "out")
+  os.makeDir.all(os.pwd / "out" / "post")
+
+  for ((_, suffix, path, publishDate) <- postInfo) {
+    val parser = org.commonmark.parser.Parser.builder().build()
+    val document = parser.parse(os.read(path))
+    val renderer = org.commonmark.renderer.html.HtmlRenderer.builder().build()
+    val output = renderer.render(document)
+
+    os.write(
+      os.pwd / "out" / "post" / mdNameToHtml(suffix),
+      doctype("html")(
+        html(
+          head(bulmaCss),
+          body(
+            h1(a("Blog", href := "../index.html"), " / ", suffix),
+            raw(output),
+            p(i("Written on " + publishDate))
+          )
+        )
+      )
+    )
   }
-  .sortBy(_._1.toInt)
 
-def mdNameToHtml(name: String) = name.replace(" ", "-").toLowerCase + ".html"
-
-val spectreCss = link(
-  rel := "stylesheet",
-  href := "https://unpkg.com/spectre.css/dist/spectre.min.css"
-)
-
-os.remove.all(os.pwd / "out")
-os.makeDir.all(os.pwd / "out" / "post")
-
-for ((_, suffix, path) <- postInfo) {
-  val parser = org.commonmark.parser.Parser.builder().build()
-  val document = parser.parse(os.read(path))
-  val renderer = org.commonmark.renderer.html.HtmlRenderer.builder().build()
-  val output = renderer.render(document)
   os.write(
-    os.pwd / "out" / "post" / mdNameToHtml(suffix),
+    os.pwd / "out" / "index.html",
     doctype("html")(
       html(
-        head(spectreCss),
+        head(bulmaCss),
         body(
-          h1(a(href := "../index.html")("Blog"), " / ", suffix),
-          raw(output)
+          h1("Blog"),
+          for ((_, suffix, _, publishDate) <- postInfo)
+          yield frag(
+            h2(a(href := ("post/" + mdNameToHtml(suffix)))(suffix)),
+            p(i("Written on " + publishDate))
+          )
         )
       )
     )
   )
-}
 
-os.write(
-  os.pwd / "out" / "index.html",
-  doctype("html")(
-    html(
-      head(spectreCss),
-      body(
-        h1("Blog"),
-        for ((_, suffix, _) <- postInfo)
-        yield h2(a(href := ("post/" + mdNameToHtml(suffix)))(suffix))
-      )
-    )
-  )
-)
+  if (targetGitRepo != "") {
+    os.proc("git", "init").call(cwd = os.pwd / "out")
+    os.proc("git", "add", "-A").call(cwd = os.pwd / "out")
+    os.proc("git", "commit", "-am", ".").call(cwd = os.pwd / "out")
+    os.proc("git", "push", targetGitRepo, "HEAD", "-f").call(cwd = os.pwd / "out")
+  }
+}
